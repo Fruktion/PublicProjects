@@ -1,6 +1,6 @@
 """
- Program testing the peace-disarray trading strategy.
- """
+Program testing the peace-disarray trading strategy.
+"""
 
 from __future__ import annotations
 

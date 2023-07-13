@@ -1,10 +1,10 @@
 """
-Program testing the peace-disarray trading strategy.
-"""
+ Program testing the peace-disarray trading strategy.
+ """
 
 from __future__ import annotations
 
-import os
+
 from typing import Callable, Any, Final, final, NoReturn
 
 import plotly.graph_objects as go
@@ -24,6 +24,9 @@ import dateutil
 import tqdm
 import types
 import multiprocessing.managers
+import os
+import sys
+import re
 
 
 class CustomClassManager(multiprocessing.managers.BaseManager):
@@ -997,7 +1000,40 @@ class RandomWalk:
 class PeaceDisarray:
     """
     Class used for testing the peace-disarray trading strategy.
+
+    Attributes:
+        regression_coefficient (str): The coefficient of the linear regression. 'ab' chosen by default.
     """
+
+    regression_coefficient: str = 'ab'
+
+    @classmethod
+    def shown_regression_coefficient(cls, new_coefficient: str) -> None:
+
+        """
+        Class method for changing the value of the linear regression coefficient to be plotted.
+
+        Args:
+            new_coefficient (str): new coefficient to be assigned to the cls.regression_coefficient attribute.
+
+        Raises:
+            TypeError: If the type of the argument is not str.
+            ValueError: If the value of the argument does not match any of the following: 'a', 'b', 'ab'.
+        """
+
+        if isinstance(new_coefficient, str):
+            pass
+        else:
+            raise TypeError(f"new_coefficient type should match {str.__name__}. "
+                            f"{type(new_coefficient).__name__} given instead.")
+
+        if new_coefficient in {'a', 'b', 'ab'}:
+            pass
+        else:
+            raise ValueError(f"new_coefficient value should match either {'a'}, {'b'} or {'ab'}. "
+                             f"{new_coefficient} given instead.")
+
+        cls.regression_coefficient: str = new_coefficient
 
     def __init__(self, single_symbol_prices: list[float] | tuple[float], values_to_linear_regression: int) -> None:
 
@@ -1174,7 +1210,7 @@ class PeaceDisarray:
                             ]
                         )
                     }
-                ).coefficient('ab')
+                ).coefficient(self.regression_coefficient)
             )
             if not counter - 100:
                 self.shared_custom.increase(100)
@@ -1191,27 +1227,118 @@ class Main:
     The main class for the whole program execution.
     """
 
+    class IncorrectValueChosen(Exception):
+
+        """
+        Exception raised if the chosen value does not match any of the specified.
+        """
+
+        def __init__(self, message: str) -> None:
+
+            """
+            The constructor of the IncorrectValueChosen exception.
+
+            Args:
+                message (str): The message to be passed to the exception.
+            """
+
+            super().__init__(message)
+
     @classmethod
     def main(cls) -> None:
+
         """
         The main method for the whole program execution.
+
+        Raises:
+            ValueError: If during choosing at the beginning of the program an incorrect choice was made by user.
+            Main.IncorrectValueChosen: If the incorrect value is chosen during I/O operations.
         """
 
-        binance_data: Final[BinanceData] = BinanceData()
-        """
-        prices: Final[list[float]] = binance_data.get_prices_of_klines_data(
-            klines_data=binance_data.download_klines(
-                symbol='BTCUSDT',
-                start_str='1 Jun 2023',
-                end_str='1 Jul 2023',
-                klines_type=binance.enums.HistoricalKlinesType.SPOT
+        plot_linear_regressions: bool = True
+
+        try:
+            match (
+                chart_type := int(
+                    input(
+                        f"Choose the plot you wanna get:\n\"{1}\" - market data\n\"{2}\" - random walk data\n"
+                    )
+                )
+            ):
+                case 1:  # market data
+                    symbol: str = input(f"Choose the symbol:\n")
+                    start_str: str = input(f"Choose the starting date:\n")
+                    end_str: str = input(f"Choose the ending date:\n")
+                    try:
+                        match (
+                            later_decision := int(
+                                input(
+                                    f"After plotting the data, what do you want to plot?\n"
+                                    f"\"{1}\" - Smoothed earlier plotted graph\n"
+                                    f"\"{2}\" - Graph of linear regression \"a\" coefficients\n"
+                                    f"\"{3}\" - Graph of linear regression \"b\" coefficients\n"
+                                    f"\"{4}\" - Nothing\n"
+                                )
+                            )
+                        ):
+                            case 1:
+                                pass
+                            case 2:
+                                PeaceDisarray.shown_regression_coefficient('a')
+                            case 3:
+                                PeaceDisarray.shown_regression_coefficient('b')
+                            case 4:
+                                plot_linear_regressions: bool = False
+                            case _:
+                                raise cls.IncorrectValueChosen(f"The chosen value should be either {1}, {2}, {3} or "
+                                                               f"{4}. {later_decision} given instead.")
+                    except ValueError as not_a_number_error:
+                        raise ValueError(
+                            "Incorrect value given not being a number: {}".format(
+                                re.search(r"'.*", str(not_a_number_error)).group(0)
+                            )
+                        )
+                    finally:
+                        sys.stdout.flush()
+
+                    binance_data: Final[BinanceData] = BinanceData()
+                    print(f"Proceeding to data gather for the following input:\n"
+                          f"symbol: {symbol}\n"
+                          f"starting date: {start_str}\n"
+                          f"ending date: {end_str}")
+                    prices: Final[list[float]] = binance_data.get_prices_of_klines_data(
+                        klines_data=binance_data.download_klines(
+                            symbol=symbol,
+                            start_str=start_str,
+                            end_str=end_str
+                        )
+                    )
+                case 2:  # random walk
+                    try:
+                        prices: Final[tuple[float]] = RandomWalk().create_sequence(
+                            number=int(
+                                input(f"Random walk data has been chosen. Insert the size of the random walk data.\n")
+                            )
+                        )
+                    except ValueError as not_a_number_error:
+                        raise ValueError(
+                            "Incorrect value given not being a number: {}".format(
+                                re.search(r"'.*'", str(not_a_number_error)).match(0)
+                            )
+                        )
+                    finally:
+                        sys.stdout.flush()
+                case _:
+                    raise ValueError(f"The chosen value should be either {1} or {2}. Other values are not allowed. "
+                                     f"{chart_type} value given instead.")
+        except ValueError as not_a_number_error:
+            raise ValueError(
+                "Incorrect value given not being a number: {}".format(
+                    re.search(r"'.*", str(not_a_number_error)).group(0)
+                )
             )
-        )
-
-        """
-        prices: Final[tuple[float]] = RandomWalk().create_sequence(
-            number=10000
-        )
+        finally:
+            sys.stdout.flush()
 
         shift: Final[int] = int(
             len(prices) * 0.05
@@ -1222,13 +1349,14 @@ class Main:
             title=f'RealPlot_shift_{shift}'
         )
 
-        ValuesPlotter(
-            values=PeaceDisarray(
-                single_symbol_prices=prices,
-                values_to_linear_regression=shift
-            ).test(),
-            title=f'RegressionPlot_shift_{shift}'
-        )
+        if plot_linear_regressions:
+            ValuesPlotter(
+                values=PeaceDisarray(
+                    single_symbol_prices=prices,
+                    values_to_linear_regression=shift
+                ).test(),
+                title=f'RegressionPlot_shift_{shift}'
+            )
 
 
 if __name__ == '__main__':

@@ -1,3 +1,7 @@
+"""
+Program for conversion of the list of values to a .txt file with the same values but separated by spaces.
+"""
+
 from __future__ import annotations
 
 import os
@@ -7,7 +11,7 @@ import multiprocessing.managers
 import numbers
 import types
 import tqdm
-from typing import Self, Callable, Any
+from typing import Self, Callable, Any, final
 
 
 class ProgressBar:
@@ -154,58 +158,84 @@ class ShareManager(multiprocessing.managers.BaseManager):
         cls.register(typeid, fn)
 
 
-def create_string(values: list[float], pb: multiprocessing.managers.ValueProxy[ProgressBar], index: int) -> tuple[int, str]:
-    return_str: str = str()
-    for value in values:
-        return_str += str(value) + " "
-        pb.increase()
-
-    return index, return_str
-
-
+@final
 class Main:
+
+    """
+    The Main class for the whole program execution.
+    """
 
     @classmethod
     def main(cls) -> None:
+
+        """
+        The main method for the whole program execution.
+        """
+
         with open("prices_1_Jan_2020_1_Aug_2023", 'r') as file:
             prices: list[float] = json.loads(file.read())
-        new_prices = [[]]
-        prices_per_thread = len(prices) // os.cpu_count()
-        undistributed_price_index = None
+        new_prices: list[list[float]] = [[]]
+        prices_per_thread: int = len(prices) // os.cpu_count()
+        undistributed_price_index: int | None = None
         for index, price in enumerate(prices):
             if len(new_prices[-1]) < prices_per_thread:
                 new_prices[-1].append(price)
             elif len(new_prices) < os.cpu_count():
                 new_prices.append([price])
             else:
-                undistributed_price_index = index
+                undistributed_price_index: int | None = index
+
         if undistributed_price_index is not None:
             for index, price in enumerate(prices[undistributed_price_index:]):
                 new_prices[index % os.cpu_count()].append(price)
 
         ShareManager.custom_register('ProgressBar', ProgressBar)
-        results = [None for _ in range(os.cpu_count())]
+        results: list[str | None] = [None for _ in range(os.cpu_count())]
         with ShareManager() as manager:
-            progress_bar: multiprocessing.managers.ValueProxy[
-                ProgressBar] = getattr(manager, manager.ProgressBar.__name__)(len(prices), "String creation")
+            progress_bar: multiprocessing.managers.ValueProxy[ProgressBar] = getattr(
+                manager, manager.ProgressBar.__name__
+            )(len(prices), "String creation")
 
             with concurrent.futures.ProcessPoolExecutor() as executor:
-                futures = [
-                    executor.submit(create_string, values, progress_bar, index)
+                futures: list[concurrent.futures.Future[tuple[int, str]]] = [
+                    executor.submit(cls._create_string, values, progress_bar, index)
                     for index, values in enumerate(new_prices)
                 ]
 
                 for future in concurrent.futures.as_completed(futures):
-                    future_result = future.result()
-                    results[future_result[0]] = future_result[1]
+                    future_result: tuple[int, str] = future.result()
+                    results[future_result[0]]: str = future_result[1]
 
         saved_str: str = str()
         for result in results:
             saved_str += result
 
-        print(saved_str)
         with open('values.txt', 'w') as file:
-            file.write(saved_str)
+            file.write(saved_str[:-1])
+
+    @staticmethod
+    def _create_string(values: list[float], pb: multiprocessing.managers.ValueProxy[ProgressBar],
+                       index: int) -> tuple[int, str]:
+
+        """
+        Method for string creation out of the list of values.
+
+        Args:
+            values (list[float]): List of values for conversion.
+            pb (multiprocessing.managers.ValueProxy[ProgressBar]): Shared instance of the ProgressBar object.
+            index (int): Index for knowing on which thread the current method run is run.
+
+        Returns:
+            tuple[int, str]: Tuple of index and the string being the main result of the method.
+        """
+
+        return_str: str = str()
+        for value in values:
+            return_str += str(value) + " "
+            pb.increase()
+
+        return index, return_str
+
 
 if __name__ == '__main__':
     Main.main()

@@ -106,7 +106,7 @@ class ShareManager(multiprocessing.managers.BaseManager):
 
         The example for the intended use:
             "
-            ShareManager.register('MyCustomClass', MyCustomClass)
+            ShareManager.custom_register('MyCustomClass', MyCustomClass)
             with ShareManager() as manager:
                 # Equivalent to "manager.MyCustomClass(10)" except the fact that the equivalent notation (the one in
                 # double quotes) raises a warning:

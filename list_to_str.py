@@ -172,7 +172,7 @@ class Main:
         The main method for the whole program execution.
         """
 
-        with open("prices_1_Jan_2020_1_Aug_2023", 'r') as file:
+        with open("<file_name>", 'r') as file:
             prices: list[float] = json.loads(file.read())
         new_prices: list[list[float]] = [[]]
         prices_per_thread: int = len(prices) // os.cpu_count()
